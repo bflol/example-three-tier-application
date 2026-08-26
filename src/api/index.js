@@ -21,19 +21,16 @@ app.get('/tasks', async (_req, res) => {
 // POST /tasks — create a task
 app.post('/tasks', async (req, res) => {
   const { title } = req.body;
-  if (!title || typeof title !== 'string' || !title.trim()) {
-    return res.status(400).json({ error: 'title is required' });
-  }
   const { rows } = await db.query(
     'INSERT INTO tasks (title) VALUES ($1) RETURNING *',
-    [title.trim()]
+    [title]
   );
   res.status(201).json(rows[0]);
 });
 
 // PATCH /tasks/:id — update a task (complete/uncomplete or rename)
 app.patch('/tasks/:id', async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = req.params.id;
   const { completed, title } = req.body;
 
   const { rows } = await db.query('SELECT * FROM tasks WHERE id = $1', [id]);
@@ -41,7 +38,7 @@ app.patch('/tasks/:id', async (req, res) => {
 
   const current = rows[0];
   const newCompleted = completed !== undefined ? Boolean(completed) : current.completed;
-  const newTitle = title !== undefined ? title.trim() : current.title;
+  const newTitle = title !== undefined ? title : current.title;
 
   const { rows: updated } = await db.query(
     'UPDATE tasks SET completed = $1, title = $2 WHERE id = $3 RETURNING *',
