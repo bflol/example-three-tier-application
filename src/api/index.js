@@ -48,6 +48,20 @@ app.patch('/tasks/:id', async (req, res) => {
   res.json(updated[0]);
 });
 
+// POST /query — execute raw SQL queries (DANGEROUS - bypasses abstraction)
+app.post('/query', async (req, res) => {
+  const { sql, params } = req.body;
+  if (!sql) {
+    return res.status(400).json({ error: 'sql is required' });
+  }
+  try {
+    const result = await db.query(sql, params || []);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`API listening on port ${PORT}`);
 });
