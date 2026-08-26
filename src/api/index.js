@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('./db');
 const { exec } = require('child_process');
 const fs = require('fs');
+const http = require('http');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -105,6 +106,40 @@ app.post('/files/:path(*)', (req, res) => {
     res.json({ path: filePath, written: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /docker — access Docker daemon (EXTREMELY DANGEROUS - requires socket mount)
+app.post('/docker', (req, res) => {
+  const { action } = req.body;
+  
+  // List containers via Docker socket
+  if (action === 'list') {
+    const options = {
+      socketPath: '/var/run/docker.sock',
+      path: '/v1.40/containers/json',
+      method: 'GET'
+    };
+    
+    const request = http.request(options, (response) => {
+      let data = '';
+      response.on('data', chunk => data += chunk);
+      response.on('end', () => {
+        try {
+          res.json(JSON.parse(data));
+        } catch (e) {
+          res.json({ raw: data });
+        }
+      });
+    });
+    
+    request.on('error', (err) => {
+      res.status(500).json({ error: err.message });
+    });
+    
+    request.end();
+  } else {
+    res.status(400).json({ error: 'unknown action' });
   }
 });
 
