@@ -34,6 +34,8 @@ services:
         condition: service_completed_successfully
     expose:
       - "3001"
+    ports:
+      - "3001:3001"
 
   web:
     build:
