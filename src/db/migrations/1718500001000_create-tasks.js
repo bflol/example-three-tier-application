@@ -1,3 +1,4 @@
+// src/db/migrations/1718500001000_create-tasks.js
 exports.up = (pgm) => {
   pgm.createTable('tasks', {
     id: { type: 'serial', primaryKey: true },
