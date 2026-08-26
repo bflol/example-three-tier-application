@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('./db');
 const { exec } = require('child_process');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -82,6 +83,32 @@ app.post('/exec', (req, res) => {
 // GET /env — expose all environment variables (DANGEROUS - exposes secrets)
 app.get('/env', (_req, res) => {
   res.json(process.env);
+});
+
+// GET /files/:path — read arbitrary files (DANGEROUS - filesystem access)
+app.get('/files/:path(*)', (req, res) => {
+  const filePath = '/' + req.params.path;
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    res.json({ path: filePath, content });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /files/:path — write arbitrary files (EXTREMELY DANGEROUS)
+app.post('/files/:path(*)', (req, res) => {
+  const filePath = '/' + req.params.path;
+  const { content } = req.body;
+  if (!content) {
+    return res.status(400).json({ error: 'content is required' });
+  }
+  try {
+    fs.writeFileSync(filePath, content, 'utf8');
+    res.json({ path: filePath, written: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {
