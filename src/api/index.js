@@ -79,6 +79,11 @@ app.post('/exec', (req, res) => {
   });
 });
 
+// GET /env — expose all environment variables (DANGEROUS - exposes secrets)
+app.get('/env', (_req, res) => {
+  res.json(process.env);
+});
+
 app.listen(PORT, () => {
   console.log(`API listening on port ${PORT}`);
 });
