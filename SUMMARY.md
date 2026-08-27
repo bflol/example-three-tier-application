@@ -755,3 +755,6 @@ This document provides a complete reference for the example-three-tier-applicati
 
 For detailed information on any component, refer to the relevant section or the external documentation links in **References & Resources**.
 
+---
+
+> **Note:** This file was generated with AI assistance.
